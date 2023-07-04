@@ -1,36 +1,38 @@
-from tkinter import ttk
 import cv2
 from pyzbar import pyzbar
 import time
 import psycopg2
 from datetime import date
-
 from tkinter import *
-import tkinter as tk
 from PIL import Image
 from PIL import ImageTk
 import imutils
-
+import pygame
 import serial
 
-
+# region arduino
+"""
 import serial.tools.list_ports
 ports = serial.tools.list_ports.comports()
 for port in ports:
     print(port.device)
 
 
-ser = serial.Serial('COM10', 9600)
+ser = serial.Serial('COM9', 9600)
 if not ser.isOpen():
     ser.open()
 print('COM10 is open', ser.isOpen())
+"""
+# endregion arduino
+
+# region DataBaseConnections
 
 def connection():
     try:
-        connection = psycopg2.connect(host='proyecto-a.cp6afttaszko.us-east-1.rds.amazonaws.com',
-                                     database="Proyecto_A",user="postgres",password="12345678")
-        #connection = psycopg2.connect(host='localhost',
-         #                             database="personasProyectoGym",user="postgres",password="1234")
+        #connection = psycopg2.connect(host='proyecto-a.cp6afttaszko.us-east-1.rds.amazonaws.com',
+        #                            database="Proyecto_A",user="postgres",password="12345678")
+        connection = psycopg2.connect(host='localhost',
+                                     database="personasProyectoGym",user="postgres",password="1234")
         return connection
     
     except(Exception, connection.Error) as error:
@@ -56,6 +58,9 @@ def select_query(query,data=[]):
         print("Error unexpect, connection terminated")
         print("Error: %s" % error)
 
+# endregion DataBaseConnections
+
+# region 
 
 def read_barcodes(frame):
     barcode_info = ""
@@ -75,7 +80,10 @@ def read_barcodes(frame):
         
     return frame, barcode_info
 
-
+def play_sound(file_path):
+    pygame.mixer.init()
+    pygame.mixer.music.load(file_path)
+    pygame.mixer.music.play()
 
 #4
 
@@ -89,36 +97,51 @@ def visualizar():
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             frame, reading = read_barcodes(frame)
             print(reading)
+            font = 15
             #hide label here
             if (reading != ""):
-                query = "select fecha_de_caducidad from person_qrcode where qrcode=%s"
-                data, = select_query(query, [reading])[0]
-                today = date.today()
-                
-                queryRut = "select rut from person_qrcode where qrcode=%s"
-                data2, = select_query(queryRut, [reading])[0]
-                print(data2)
-                rutCosa = str(data2)
-                queryName = "select namePerson from person where rut=%s"
-                data3, = select_query(queryName, [rutCosa])[0]
-                print(data)
-                print(data3)
-                if(data > today):
-                    print("192.168.1.1")
-                    lblStatus.config(text="Valid QR Code for:"+data3+"", bg="green")
-                    #show label here    
-                    ser.write(b'1')                
-                    time.sleep(5)
-                    
+                query = "select rut from person_qrcode where qrcode=%s" 
+                data = select_query(query, [reading])
+                if(data == []):
+                    print("\npersona no encontrado")
+                    lblStatus.config(text="Qr no valido", bg="red",font=('Agency FB',font))
+                    time.sleep(1)
                 else:
-                    print("paga")
-                    lblStatus.config(text="Expired QR Code for:"+data3+"", bg="red")
-                    ser.write(b'2') 
-                    time.sleep(0)
+                    query = "select fecha_de_caducidad from person_qrcode where qrcode=%s"
+                    data, = select_query(query, [reading])[0]
+                    today = date.today()
+                    
+                    queryRut = "select rut from person_qrcode where qrcode=%s"
+                    data2, = select_query(queryRut, [reading])[0]
+                    print(data2)
+                    rutCosa = str(data2)
+                    queryName = "select namePerson from person where rut=%s"
+                    data3, = select_query(queryName, [rutCosa])[0]
+                    print(data)
+                    print(data3)
+                    if(data > today):
+                        print("192.168.1.1")
+                        lblStatus.config(text=data3+" su acceso a sido concedido", bg="green", font=('Agency FB',font))
+                        time.sleep(1)
+                        filepath = "D:/VIsual/proyecto/tmp_7901-951678082.mp3"
+                        #play_sound(filepath)
+                        #show label here    
+                        #ser.write(b'1')                
+                        
+                        
+                    else:
+                        lblStatus.config(text=data3+" su codigo qr a expirado", bg="red", font=('Agency FB',font))
+                        print("paga")
+                        
+                        time.sleep(1)
+                        filepath = "D:/VIsual/proyecto/metalpipefallingsound.mp3"
+                        #play_sound(filepath)
+                        #ser.write(b'2') 
+                        time.sleep(0)
 
             else:
                 lblStatus.config(text="", bg="SystemButtonFace")
-                ser.write(b'0') 
+                #ser.write(b'0') 
             im = Image.fromarray(frame)
             img = ImageTk.PhotoImage(image=im)
             lblVideo.place(x=0,y=40)
@@ -137,7 +160,9 @@ def visualizar():
 
 cap = None
 root = Tk()
-
+query = "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
+data = select_query(query, [])
+print(data)
 
 
 
@@ -172,3 +197,4 @@ if cap is not None:
         
 root.mainloop()
 
+# endregion 
